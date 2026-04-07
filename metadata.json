@@ -1,0 +1,5 @@
+{
+  "name": "Reddit Consensus Engine",
+  "description": "Aggregates Reddit discussions to provide grounded, community-driven product recommendations with sentiment analysis and pros/cons.",
+  "requestFramePermissions": []
+}
