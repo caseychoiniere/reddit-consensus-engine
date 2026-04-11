@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Configure Tailwind v4 to use the .dark class for the dark variant */
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --border-primary: #e2e8f0;
+  }
+
+  .dark {
+    --bg-primary: #020617;
+    --bg-secondary: #0f172a;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-primary: #1e293b;
+    color-scheme: dark;
+  }
+
+  html {
+    @apply antialiased scroll-smooth;
+  }
+  
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply transition-colors duration-300 min-h-screen;
+  }
+
+  * {
+    @apply transition-colors duration-300;
+    border-color: var(--border-primary);
+  }
+
+  /* Ensure utility classes work with the variables as a fallback */
+  .dark body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+}
+
+/* Custom scrollbar for dark mode */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background-color: var(--bg-secondary);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: var(--border-primary);
+  @apply rounded-full border-2;
+  border-color: var(--bg-secondary);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-700;
+}
