@@ -26,7 +26,7 @@ if (rawKey) {
 
 import { fetchRedditThreadContent } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/reddit.ts";
 import { prisma } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/prisma.ts";
-import { findRedditThreads, extractProductInsights, generateSummary } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/extraction.ts";
+import { findRedditThreads, extractProductInsights, generateSummary } from "./src/lib/extraction.ts";
 import { RedditPost } from "../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
 
 async function startServer() {
