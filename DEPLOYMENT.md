@@ -37,7 +37,7 @@ Recommended `vercel.json`:
 You MUST set the following in the Vercel Dashboard (**Settings > Environment Variables**):
 
 - `GEMINI_API_KEY`: Your Google Gemini API key from [AI Studio](https://aistudio.google.com/app/apikey).
-- `DATABASE_URL`: Your Prisma database connection string (e.g., from Supabase or Railway).
+- `DATABASE_URL`: Your Prisma database connection string (e.g., from Supabase, Neon, or Railway). Use a PostgreSQL-compatible provider.
 - `NODE_ENV`: `production`
 
 ## 3. Security (Is my Key safe?)
@@ -47,7 +47,12 @@ You MUST set the following in the Vercel Dashboard (**Settings > Environment Var
 3. All AI operations happen behind your Express API routes (`/api/research/*`).
 4. We have implemented **Rate Limiting** in `server.ts` to prevent people from using your API key to drain your credits.
 
-## 4. Google Search Tool Limitation
+## 4. Prisma & Database
+1. **Migrations:** Before deploying, ensure your database schema is up to date by running `npx prisma db push` or `npx prisma migrate deploy`.
+2. **Client Generation:** Run `npx prisma generate` in your Vercel build step (usually handled automatically if in `package.json`).
+3. **Environment:** Ensure `DATABASE_URL` is correctly set in Vercel Settings.
+
+## 5. Google Search Tool Limitation
 The `googleSearch` tool used in `extraction.ts` is special to the **AI Studio Preview Environment**.
 When you move to Vercel, you will need to:
 1. Change the model name from `gemini-3-flash-preview` to `gemini-1.5-flash` or `gemini-2.0-flash`.

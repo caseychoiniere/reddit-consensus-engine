@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx ../../../Downloads/reddit-consensus-engine (4)/server.ts",
+    "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -38,11 +38,5 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "protobufjs": ">=7.5.5",
-      "postcss": ">=8.5.10"
-    }
   }
 }

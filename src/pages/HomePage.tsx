@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight, MessageSquare, ShieldCheck, Zap, History, Trash2, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useAppContext } from "../context/AppContext";
-import ThemeToggle from "../components/ThemeToggle";
+import { useAppContext } from "../../../../../Downloads/reddit-consensus-engine (5)/src/context/AppContext.tsx";
+import ThemeToggle from "../../../../../Downloads/reddit-consensus-engine (5)/src/components/ThemeToggle.tsx";
 
 export default function HomePage() {
   const [query, setQuery] = useState("");

@@ -24,10 +24,10 @@ if (rawKey) {
   console.warn("CRITICAL: GEMINI_API_KEY is missing from process.env");
 }
 
-import { fetchRedditThreadContent } from "../../../Downloads/reddit-consensus-engine (4)/src/lib/reddit";
-import { prisma } from "../../../Downloads/reddit-consensus-engine (4)/src/lib/prisma";
-import { findRedditThreads, extractProductInsights, generateSummary } from "../../../Downloads/reddit-consensus-engine (4)/src/lib/extraction";
-import { RedditPost } from "../../../Downloads/reddit-consensus-engine (4)/src/types";
+import { fetchRedditThreadContent } from "../../../Downloads/reddit-consensus-engine (5)/src/lib/reddit.ts";
+import { prisma } from "../../../Downloads/reddit-consensus-engine (5)/src/lib/prisma.ts";
+import { findRedditThreads, extractProductInsights, generateSummary } from "../../../Downloads/reddit-consensus-engine (5)/src/lib/extraction.ts";
+import { RedditPost } from "../../../Downloads/reddit-consensus-engine (5)/src/types.ts";
 
 async function startServer() {
   const app = express();
