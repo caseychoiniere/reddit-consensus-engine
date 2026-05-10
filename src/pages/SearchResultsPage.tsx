@@ -5,10 +5,10 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { Search, ArrowLeft, ExternalLink, ThumbsUp, ThumbsDown, Quote, AlertCircle, Loader2, X, Scale, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SearchResult, RankedProduct, RedditPost } from "../types";
-import { cn } from "../../../../../Downloads/reddit-consensus-engine (5)/src/lib/utils.ts";
-import { rankProducts } from "../../../../../Downloads/reddit-consensus-engine (5)/src/lib/ranking.ts";
-import { useAppContext } from "../../../../../Downloads/reddit-consensus-engine (5)/src/context/AppContext.tsx";
-import ThemeToggle from "../../../../../Downloads/reddit-consensus-engine (5)/src/components/ThemeToggle.tsx";
+import { cn } from "../lib/utils.ts";
+import { rankProducts } from "../lib/ranking.ts";
+import { useAppContext } from "../context/AppContext.tsx";
+import ThemeToggle from "../components/ThemeToggle.tsx";
 
 function SearchResultsContent() {
   const [searchParams] = useSearchParams();

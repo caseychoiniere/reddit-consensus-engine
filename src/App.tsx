@@ -4,9 +4,9 @@
  */
 
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import HomePage from "../../../../Downloads/reddit-consensus-engine (5)/src/pages/HomePage.tsx";
-import SearchResultsPage from "../../../../Downloads/reddit-consensus-engine (5)/src/pages/SearchResultsPage.tsx";
-import { AppProvider } from "../../../../Downloads/reddit-consensus-engine (5)/src/context/AppContext.tsx";
+import HomePage from "./pages/HomePage.tsx";
+import SearchResultsPage from "./pages/SearchResultsPage.tsx";
+import { AppProvider } from "./context/AppContext.tsx";
 
 export default function App() {
   return (
