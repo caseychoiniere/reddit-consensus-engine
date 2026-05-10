@@ -6,7 +6,6 @@ import { Search, ArrowLeft, ExternalLink, ThumbsUp, ThumbsDown, Quote, AlertCirc
 import { motion, AnimatePresence } from "motion/react";
 import { SearchResult, RankedProduct, RedditPost } from "../types";
 import { cn } from "../lib/utils";
-import { extractProductInsights, generateSummary, findRedditThreads } from "../lib/extraction";
 import { rankProducts } from "../lib/ranking";
 import { useAppContext } from "../context/AppContext";
 import ThemeToggle from "../components/ThemeToggle";
@@ -23,6 +22,18 @@ function SearchResultsContent() {
   const [selectedProducts, setSelectedProducts] = useState<RankedProduct[]>([]);
   const [isComparing, setIsComparing] = useState(false);
   const { addSearch, searchCache } = useAppContext();
+  const [searchInput, setSearchInput] = useState(query || "");
+
+  useEffect(() => {
+    setSearchInput(query || "");
+  }, [query]);
+
+  const handleNewSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchInput.trim() && searchInput.trim() !== query) {
+      navigate(`/search?q=${encodeURIComponent(searchInput.trim())}`);
+    }
+  };
 
   const toggleProductSelection = (product: RankedProduct) => {
     setSelectedProducts(prev => {
@@ -102,20 +113,39 @@ function SearchResultsContent() {
       }, 8000);
 
       try {
+        setStatus("Checking server cache...");
+        const cacheRes = await fetch(`/api/cache-lookup?q=${encodeURIComponent(query)}`);
+        if (cacheRes.ok && isMounted) {
+          const cachedResult = await cacheRes.json();
+          setData(cachedResult);
+          setLoading(false);
+          addSearch(query, cachedResult);
+          return;
+        }
+
         // 1. Find relevant Reddit threads using Google Search grounding
         setStatus("Finding relevant Reddit threads...");
-        const threadUrls = await findRedditThreads(query);
+        const threadsRes = await fetch("/api/research/threads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        
+        if (!threadsRes.ok) throw new Error("Failed to find Reddit threads");
+        const { urls: threadUrls } = await threadsRes.json();
+        
         console.log(`Step 1 complete: Found ${threadUrls.length} threads`);
         
+        if (!isMounted) return;
+
         let posts: RedditPost[] = [];
 
-        if (threadUrls.length > 0 && isMounted) {
-          // 2. Fetch content for these specific threads
+        if (threadUrls.length > 0) {
+          // 2. Fetch content for these specific threads via server proxy
           setStatus(`Fetching content from ${threadUrls.length} threads...`);
-          console.log(`Step 2: Fetching content for ${threadUrls.length} URLs...`);
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for content fetch
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
 
             const contentRes = await fetch("/api/reddit-content", {
               method: "POST",
@@ -130,20 +160,16 @@ function SearchResultsContent() {
               const contentData = await contentRes.json();
               posts = contentData.posts || [];
               console.log(`Step 2 complete: Successfully fetched ${posts.length} posts`);
-            } else {
-              console.warn(`Step 2 failed: Response status ${contentRes.status}`);
             }
           } catch (e) {
             console.warn("Step 2 failed: Fetch content via proxy timed out or errored", e);
-            // We continue even if fetch fails - extraction will use URL context instead
           }
         }
 
         if (!isMounted) return;
 
-        // 3. If no threads found at all, we truly have nothing
-        if (threadUrls.length === 0) {
-          console.log("Step 3: No threads found, returning empty result");
+        // 3. If no threads found at all (and no content fetched)
+        if (threadUrls.length === 0 && posts.length === 0) {
           const emptyResult: SearchResult = {
             query,
             summary: "No relevant Reddit discussions found for this query.",
@@ -152,33 +178,42 @@ function SearchResultsContent() {
           };
           setData(emptyResult);
           addSearch(query, emptyResult);
+          setLoading(false);
           return;
         }
 
-        // 4. Extract Insights (Client-side Gemini call)
-        setStatus(`Extracting product insights for ${query}...`);
-        console.log(`Step 4: Starting extraction for ${query}...`);
-          
-        const extraction = await extractProductInsights(query, posts, threadUrls);
-        console.log(`Step 4 complete: Extracted ${extraction.products.length} products`);
+        // 4. Extract Insights
+        setStatus(`Extracting product insights...`);
+        const insightsRes = await fetch("/api/research/insights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, posts, urls: threadUrls }),
+        });
+        
+        if (!insightsRes.ok) throw new Error("Failed to extract product insights");
+        const extraction = await insightsRes.json();
         
         if (!isMounted) return;
 
         // 5. Rank Products
-        setStatus("Ranking recommendations based on community sentiment...");
+        setStatus("Ranking recommendations...");
         const rankedProducts = rankProducts(extraction, posts);
-        console.log(`Step 5 complete: Ranked ${rankedProducts.length} products`);
 
-        // 6. Generate Summary (Client-side Gemini call)
+        // 6. Generate Summary
         setStatus("Synthesizing the final consensus...");
-        const summary = await generateSummary(query, extraction);
-        console.log("Step 6 complete: Summary generated");
+        const summaryRes = await fetch("/api/research/summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, extraction }),
+        });
+        
+        if (!summaryRes.ok) throw new Error("Failed to generate summary");
+        const { summary } = await summaryRes.json();
 
         if (!isMounted) return;
 
         // 7. Aggregate Sources
         let sources: { subreddit: string; count: number }[] = [];
-        
         if (posts.length > 0) {
           sources = Array.from(
             posts.reduce((acc, post) => {
@@ -187,7 +222,6 @@ function SearchResultsContent() {
             }, new Map<string, number>())
           ).map(([subreddit, count]) => ({ subreddit, count }));
         } else {
-          // Extract subreddits from URLs
           const subreddits = threadUrls.map(url => {
             const match = url.match(/\/r\/([a-zA-Z0-9._-]+)/);
             return match ? match[1] : "reddit";
@@ -208,10 +242,22 @@ function SearchResultsContent() {
 
         setData(finalResult);
         addSearch(query, finalResult);
+
+        // 8. Optional: Save to server cache (background)
+        fetch("/api/cache-result", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, result: finalResult }),
+        }).catch(err => console.warn("Failed to cache result on server", err));
+
       } catch (err) {
         console.error("Search error:", err);
         if (isMounted) {
-          setError("Something went wrong while analyzing Reddit discussions.");
+          if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('timeout'))) {
+            setError("Analysis timed out. Community sentiment analysis can take time.");
+          } else {
+            setError("Something went wrong while analyzing Reddit discussions.");
+          }
         }
       } finally {
         if (isMounted) {
@@ -234,12 +280,12 @@ function SearchResultsContent() {
         <div className="relative z-10 flex flex-col items-center">
           <div className="relative w-24 h-24 mb-8 flex items-center justify-center">
             <motion.div
-              animate={animationPhase === 'spin' ? { rotate: 360 } : { rotate: 0 }}
-              transition={animationPhase === 'spin' ? {
-                duration: 1,
-                repeat: Infinity,
-                ease: "linear",
-              } : { duration: 0.5 }}
+              animate={{ rotate: animationPhase === 'spin' ? 360 : 0 }}
+              transition={{
+                rotate: animationPhase === 'spin' 
+                  ? { duration: 1, repeat: Infinity, ease: "linear" }
+                  : { duration: 0.5, ease: "easeOut" }
+              }}
               className="relative w-full h-full flex items-center justify-center"
             >
               {[0, 1, 2, 3].map((i) => (
@@ -258,13 +304,13 @@ function SearchResultsContent() {
                     y: {
                       duration: 1,
                       repeat: Infinity,
-                      delay: i * 0.1,
+                      delay: i * 0.15,
                       ease: "easeInOut",
                     },
                     scale: {
                       duration: 1,
                       repeat: Infinity,
-                      delay: i * 0.1,
+                      delay: i * 0.15,
                       ease: "easeInOut",
                     },
                     x: { duration: 0.5 }
@@ -351,15 +397,15 @@ function SearchResultsContent() {
           <button onClick={() => navigate("/")} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-500 dark:text-slate-200" />
           </button>
-          <div className="flex-1 relative">
+          <form onSubmit={handleNewSearch} className="flex-1 relative">
             <input
               type="text"
-              readOnly
-              value={query || ""}
-              className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl py-2 pl-10 pr-4 text-sm font-medium focus:ring-0 dark:text-white"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl py-2 pl-10 pr-4 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all dark:text-white"
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-400" />
-          </div>
+          </form>
           <ThemeToggle />
         </div>
       </header>
@@ -572,7 +618,7 @@ function ProductCard({ product, rank, isSelected, onToggleSelect }: {
       )}
     >
       {/* Selection Overlay/Button */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col items-end">
+      <div className="hidden md:flex absolute top-4 right-4 z-10 flex-col items-end">
         <button 
           onClick={onToggleSelect}
           onMouseEnter={() => setShowTooltip(true)}
@@ -617,9 +663,24 @@ function ProductCard({ product, rank, isSelected, onToggleSelect }: {
             </div>
             <h4 className="text-2xl font-bold dark:text-white">{product.name}</h4>
           </div>
-          <div className="text-right">
+          <div className="text-right flex flex-col items-end">
             <div className="text-sm font-bold text-slate-400 dark:text-slate-400 uppercase">Mentions</div>
-            <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{product.mentions}</div>
+            <div className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">{product.mentions}</div>
+            
+            {/* Mobile-only positioning for the button to be below mentions */}
+            <div className="md:hidden">
+              <button 
+                onClick={onToggleSelect}
+                className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center transition-all border-2",
+                  isSelected 
+                    ? "bg-orange-600 border-orange-600 text-white" 
+                    : "bg-white/80 dark:bg-slate-800/80 backdrop-blur border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:border-orange-600 hover:text-orange-600"
+                )}
+              >
+                {isSelected ? <Check className="w-5 h-5" /> : <Scale className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -655,9 +716,11 @@ function ProductCard({ product, rank, isSelected, onToggleSelect }: {
             <Quote className="w-4 h-4" /> Reddit Quotes
           </h5>
           {product.quotes.map((quote, i) => (
-            <blockquote key={i} className="pl-4 border-l-2 border-slate-100 dark:border-slate-800 italic text-sm text-slate-500 dark:text-slate-200 leading-relaxed">
-              "{quote.text}"
-            </blockquote>
+            <div key={i} className="space-y-1">
+              <blockquote className="pl-4 border-l-2 border-slate-100 dark:border-slate-800 italic text-sm text-slate-500 dark:text-slate-200 leading-relaxed">
+                "{quote.text}"
+              </blockquote>
+            </div>
           ))}
         </div>
       </div>

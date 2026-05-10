@@ -7,7 +7,7 @@ import {
   clearAllSearches, 
   saveToCache, 
   getAllCache 
-} from '../lib/db';
+} from '../../../../../Downloads/reddit-consensus-engine (4)/src/lib/db.ts';
 
 interface AppContextType {
   theme: 'light' | 'dark';

@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model SearchQuery {
@@ -38,8 +38,8 @@ model Mention {
   sourceUrl     String
   textSnippet   String
   sentiment     String      // "positive", "negative", "neutral"
-  pros          String[]
-  cons          String[]
+  pros          String?
+  cons          String?
   createdAt     DateTime    @default(now())
 }
 

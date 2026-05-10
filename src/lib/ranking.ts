@@ -64,9 +64,11 @@ export function rankProducts(extraction: ExtractionResult, posts: RedditPost[]):
       pros: Array.from(data.pros).slice(0, 3),
       cons: Array.from(data.cons).slice(0, 3),
       quotes: Array.from(data.quotes.values()).slice(0, 3).map(q => ({
-      ...q,
-      sourceUrl: q.sourceUrl?.startsWith('http') ? q.sourceUrl : `https://www.reddit.com${q.sourceUrl?.startsWith('/') ? '' : '/'}${q.sourceUrl}`
-    })),
+        ...q,
+        sourceUrl: q.sourceUrl 
+          ? (q.sourceUrl.startsWith('http') ? q.sourceUrl : `https://www.reddit.com${q.sourceUrl.startsWith('/') ? '' : '/'}${q.sourceUrl}`)
+          : undefined
+      })),
       confidence: data.mentions >= 5 ? "high" : data.mentions >= 2 ? "medium" : "low",
       affiliateUrl
     };

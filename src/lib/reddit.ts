@@ -14,15 +14,15 @@ export async function fetchRedditThreadContent(url: string): Promise<RedditPost 
   };
 
   const userAgents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edge/123.0.0.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
   ];
   const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
 
   const fetchWithRetry = async (jsonUrl: string): Promise<Response | null> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       console.log(`Attempting to fetch Reddit content from: ${jsonUrl}`);
@@ -30,17 +30,16 @@ export async function fetchRedditThreadContent(url: string): Promise<RedditPost 
         signal: controller.signal,
         headers: {
           "User-Agent": randomUserAgent,
-          "Accept": "application/json, text/plain, */*",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache",
-          "Referer": "https://www.reddit.com/",
+          "Accept": "application/json",
+          "Accept-Language": "en-US,en;q=0.5",
+          "Referer": "https://www.google.com/",
         },
       });
       clearTimeout(timeoutId);
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
+      console.error(`Fetch error for ${jsonUrl}:`, error);
       return null;
     }
   };
