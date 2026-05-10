@@ -1,20 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { RedditPost, ExtractionResult } from "../types.ts";
+import { RedditPost, ExtractionResult } from "../types";
 
 const getAIClient = () => {
   let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not defined. Please check your environment variables or AI Studio Secrets.");
   }
-  
+
   // Remove any unintentional quotes, whitespace, or hidden characters (BOM, etc.)
   apiKey = apiKey.trim().replace(/^["']|["']$/g, "").replace(/[^\x21-\x7E]/g, "");
-  
+
   // Validation: Google API keys usually start with AIza
   if (!apiKey.startsWith("AIza")) {
     console.warn(`GEMINI_API_KEY warning: Key starts with "${apiKey.substring(0, 4)}...", which is unusual (expected "AIza").`);
   }
-  
+
   return new GoogleGenAI({ apiKey });
 };
 
@@ -27,11 +27,11 @@ export async function findRedditThreads(query: string): Promise<string[]> {
   IMPORTANT: You MUST provide the full URLs to the Reddit threads in your response. Do not just summarize.
   Format your response as a simple list of URLs, one per line.`;
 
-  const timeoutPromise = new Promise<string[]>((resolve) => 
-    setTimeout(() => {
-      console.warn(`Timeout finding threads via Google Search grounding for query: ${query} (90s)`);
-      resolve([]);
-    }, 90000)
+  const timeoutPromise = new Promise<string[]>((resolve) =>
+      setTimeout(() => {
+        console.warn(`Timeout finding threads via Google Search grounding for query: ${query} (90s)`);
+        resolve([]);
+      }, 90000)
   );
 
   const searchPromise = (async () => {
@@ -47,7 +47,7 @@ export async function findRedditThreads(query: string): Promise<string[]> {
 
       const text = response.text || "";
       console.log("Gemini search response text:", text);
-      
+
       const urls: string[] = [];
 
       // 1. Extract from grounding metadata (most reliable for search)
@@ -66,18 +66,18 @@ export async function findRedditThreads(query: string): Promise<string[]> {
       matches.forEach(m => urls.push(m));
 
       // 3. Clean and deduplicate
-      const cleanUrls = [...new Set(urls.map(u => 
-        u.replace(/[.\/!?,;:]+$/, "")
-         .replace(/[)]+$/, "")
-         .replace(/\\/g, "")
-         .replace(/&amp;/g, "&")
+      const cleanUrls = [...new Set(urls.map(u =>
+          u.replace(/[.\/!?,;:]+$/, "")
+              .replace(/[)]+$/, "")
+              .replace(/\\/g, "")
+              .replace(/&amp;/g, "&")
       ))].filter(u => u.includes("reddit.com/r/") && (u.includes("/comments/") || u.split("/").length > 5));
 
       console.log(`Found ${cleanUrls.length} Reddit threads for query: ${query}`, cleanUrls);
       return cleanUrls.slice(0, 10);
     } catch (error) {
       console.error("Error finding Reddit threads:", error);
-      throw error;
+      return [];
     }
   })();
 
@@ -86,7 +86,7 @@ export async function findRedditThreads(query: string): Promise<string[]> {
 
 export async function extractProductInsights(query: string, posts: RedditPost[], urls: string[] = []): Promise<ExtractionResult> {
   const ai = getAIClient();
-  
+
   // Combine scraped posts (if any) with raw URLs for Gemini to fetch directly
   const contextText = posts.map(post => {
     const commentsText = post.comments.map(c => `[Comment by ${c.author}]: ${c.body}`).join("\n");
@@ -115,17 +115,17 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
     ${posts.length > 0 ? `Pre-scraped Context:\n${contextText.slice(0, 20000)}` : ""}
   `;
 
-  const timeoutPromise = new Promise<ExtractionResult>((resolve) => 
-    setTimeout(() => {
-      console.warn(`Timeout extracting product insights for query: ${query} (120s)`);
-      resolve({ products: [] });
-    }, 120000)
+  const timeoutPromise = new Promise<ExtractionResult>((resolve) =>
+      setTimeout(() => {
+        console.warn(`Timeout extracting product insights for query: ${query} (120s)`);
+        resolve({ products: [] });
+      }, 120000)
   );
 
   const extractionPromise = (async () => {
     try {
       console.log(`Extracting product insights for: ${query}. (URLs to fetch: ${urls.length}, Scraped: ${posts.length})`);
-      
+
       const tools: any[] = [{ googleSearch: {} }];
       if (urls.length > 0) {
         tools.push({ urlContext: {} });
@@ -151,16 +151,16 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
                     sentiment: { type: Type.STRING, enum: ["positive", "negative", "neutral"] },
                     pros: { type: Type.ARRAY, items: { type: Type.STRING } },
                     cons: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    quotes: { 
-                      type: Type.ARRAY, 
-                      items: { 
+                    quotes: {
+                      type: Type.ARRAY,
+                      items: {
                         type: Type.OBJECT,
                         properties: {
                           text: { type: Type.STRING },
                           sourceUrl: { type: Type.STRING }
                         },
                         required: ["text"]
-                      } 
+                      }
                     },
                   },
                   required: ["name", "mentionCount", "sentiment", "pros", "cons", "quotes"],
@@ -174,16 +174,16 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
 
       const text = response.text || '{"products": []}';
       console.log("Extraction raw response text:", text);
-      
+
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const jsonStr = jsonMatch ? jsonMatch[0] : text;
-      
+
       const result = JSON.parse(jsonStr);
       console.log(`Extracted ${result.products?.length || 0} products`);
       return result as ExtractionResult;
     } catch (error) {
       console.error("Extraction error:", error);
-      throw error;
+      return { products: [] };
     }
   })();
 
@@ -206,11 +206,11 @@ export async function generateSummary(query: string, extraction: ExtractionResul
     Write a concise, trustworthy summary (2-3 sentences).
   `;
 
-  const timeoutPromise = new Promise<string>((resolve) => 
-    setTimeout(() => {
-      console.warn("Timeout generating summary");
-      resolve("The analysis took longer than expected. Please check the ranked list below for details.");
-    }, 15000)
+  const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => {
+        console.warn("Timeout generating summary");
+        resolve("The analysis took longer than expected. Please check the ranked list below for details.");
+      }, 15000)
   );
 
   const summaryPromise = (async () => {
@@ -221,8 +221,7 @@ export async function generateSummary(query: string, extraction: ExtractionResul
       });
       return response.text || "No summary available.";
     } catch (error) {
-      console.error("Summary error:", error);
-      throw error;
+      return "Error generating summary.";
     }
   })();
 

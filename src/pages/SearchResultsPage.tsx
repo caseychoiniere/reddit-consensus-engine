@@ -113,50 +113,26 @@ function SearchResultsContent() {
       }, 8000);
 
       try {
-        // Utility to fetch and check JSON
-        const fetchJSON = async (url: string, options?: RequestInit) => {
-          const res = await fetch(url, options);
-          const contentType = res.headers.get("content-type");
-          if (!res.ok) {
-            let errorMessage = `Server error (${res.status})`;
-            if (contentType && contentType.includes("application/json")) {
-              const data = await res.json();
-              errorMessage = data.error || errorMessage;
-            } else {
-              const text = await res.text();
-              console.error(`Non-JSON Error Response (${res.status}) for ${url}:`, text.substring(0, 500));
-            }
-            throw new Error(errorMessage);
-          }
-          if (contentType && contentType.includes("application/json")) {
-            return res.json();
-          }
-          const text = await res.text();
-          console.error(`Unexpected Non-JSON Response for ${url}:`, text.substring(0, 500));
-          throw new Error("Received an unexpected non-JSON response from the server.");
-        };
-
         setStatus("Checking server cache...");
-        try {
-          const cachedResult = await fetchJSON(`/api/cache-lookup?q=${encodeURIComponent(query)}`);
-          if (cachedResult && isMounted) {
-            setData(cachedResult);
-            setLoading(false);
-            addSearch(query, cachedResult);
-            return;
-          }
-        } catch (e: any) {
-          console.log("Cache lookup skipped or failed:", e.message);
-          // 404 is expected for new queries
+        const cacheRes = await fetch(`/api/cache-lookup?q=${encodeURIComponent(query)}`);
+        if (cacheRes.ok && isMounted) {
+          const cachedResult = await cacheRes.json();
+          setData(cachedResult);
+          setLoading(false);
+          addSearch(query, cachedResult);
+          return;
         }
 
         // 1. Find relevant Reddit threads using Google Search grounding
         setStatus("Finding relevant Reddit threads...");
-        const { urls: threadUrls } = await fetchJSON("/api/research/threads", {
+        const threadsRes = await fetch("/api/research/threads", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
+
+        if (!threadsRes.ok) throw new Error("Failed to find Reddit threads");
+        const { urls: threadUrls } = await threadsRes.json();
 
         console.log(`Step 1 complete: Found ${threadUrls.length} threads`);
 
@@ -171,7 +147,7 @@ function SearchResultsContent() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-            const contentData = await fetchJSON("/api/reddit-content", {
+            const contentRes = await fetch("/api/reddit-content", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ urls: threadUrls }),
@@ -180,7 +156,8 @@ function SearchResultsContent() {
 
             clearTimeout(timeoutId);
 
-            if (isMounted) {
+            if (contentRes.ok && isMounted) {
+              const contentData = await contentRes.json();
               posts = contentData.posts || [];
               console.log(`Step 2 complete: Successfully fetched ${posts.length} posts`);
             }
@@ -192,7 +169,6 @@ function SearchResultsContent() {
         if (!isMounted) return;
 
         // 3. If no threads found at all (and no content fetched)
-        // Only show this if we actually succeeded in calling the search but got 0 results
         if (threadUrls.length === 0 && posts.length === 0) {
           const emptyResult: SearchResult = {
             query,
@@ -208,11 +184,14 @@ function SearchResultsContent() {
 
         // 4. Extract Insights
         setStatus(`Extracting product insights...`);
-        const extraction = await fetchJSON("/api/research/insights", {
+        const insightsRes = await fetch("/api/research/insights", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query, posts, urls: threadUrls }),
         });
+
+        if (!insightsRes.ok) throw new Error("Failed to extract product insights");
+        const extraction = await insightsRes.json();
 
         if (!isMounted) return;
 
@@ -222,11 +201,14 @@ function SearchResultsContent() {
 
         // 6. Generate Summary
         setStatus("Synthesizing the final consensus...");
-        const { summary } = await fetchJSON("/api/research/summary", {
+        const summaryRes = await fetch("/api/research/summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query, extraction }),
         });
+
+        if (!summaryRes.ok) throw new Error("Failed to generate summary");
+        const { summary } = await summaryRes.json();
 
         if (!isMounted) return;
 
@@ -268,13 +250,11 @@ function SearchResultsContent() {
           body: JSON.stringify({ query, result: finalResult }),
         }).catch(err => console.warn("Failed to cache result on server", err));
 
-      } catch (err: any) {
+      } catch (err) {
         console.error("Search error:", err);
         if (isMounted) {
-          if (err?.name === 'AbortError' || err?.message?.includes('timeout')) {
+          if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('timeout'))) {
             setError("Analysis timed out. Community sentiment analysis can take time.");
-          } else if (err?.message) {
-            setError(err.message);
           } else {
             setError("Something went wrong while analyzing Reddit discussions.");
           }

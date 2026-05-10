@@ -36,12 +36,6 @@ async function startServer() {
   // Trust proxy for express-rate-limit to work in AI Studio (which is behind a proxy)
   app.set('trust proxy', 1);
 
-  // Request Logger
-  app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
-    next();
-  });
-
   app.use(express.json({ limit: '10mb' }));
 
   // General API Rate limiter
@@ -52,8 +46,7 @@ async function startServer() {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => {
-      const forwarded = req.headers['x-forwarded-for'];
-      return Array.isArray(forwarded) ? forwarded[0] : (forwarded as string) || req.ip || "unknown";
+      return (req.headers['x-forwarded-for'] as string) || req.ip || "unknown";
     }
   });
 
@@ -64,63 +57,51 @@ async function startServer() {
     message: { error: "Too many AI research requests. Please try again in 15 minutes." },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => {
-      const forwarded = req.headers['x-forwarded-for'];
-      return Array.isArray(forwarded) ? forwarded[0] : (forwarded as string) || req.ip || "unknown";
-    }
+    keyGenerator: (req) => (req.headers['x-forwarded-for'] as string) || req.ip || "unknown"
   });
 
-  // API Routes Group
-  const apiRouter = express.Router();
-  apiRouter.use(apiLimiter);
-
-  // Health check
-  apiRouter.get("/health", (req, res) => {
-    res.json({ status: "ok", env: process.env.NODE_ENV });
-  });
+  // Apply general limiter to all API routes
+  app.use("/api/", apiLimiter);
 
   // AI Research Routes
-  apiRouter.post("/research/threads", aiLimiter, async (req, res) => {
+  app.post("/api/research/threads", aiLimiter, async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
     try {
       const urls = await findRedditThreads(query);
       return res.json({ urls });
-    } catch (error: any) {
+    } catch (error) {
       console.error("AI Thread Research error:", error);
-      const message = error?.message || "Failed to find discussion threads.";
-      return res.status(500).json({ error: message });
+      return res.status(500).json({ error: "Failed to find discussion threads." });
     }
   });
 
-  apiRouter.post("/research/insights", aiLimiter, async (req, res) => {
+  app.post("/api/research/insights", aiLimiter, async (req, res) => {
     const { query, posts, urls } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
     try {
       const extraction = await extractProductInsights(query, posts || [], urls || []);
       return res.json(extraction);
-    } catch (error: any) {
+    } catch (error) {
       console.error("AI Insight Extraction error:", error);
-      const message = error?.message || "Failed to extract product insights.";
-      return res.status(500).json({ error: message });
+      return res.status(500).json({ error: "Failed to extract product insights." });
     }
   });
 
-  apiRouter.post("/research/summary", aiLimiter, async (req, res) => {
+  app.post("/api/research/summary", aiLimiter, async (req, res) => {
     const { query, extraction } = req.body;
     if (!query || !extraction) return res.status(400).json({ error: "Query and extraction are required" });
     try {
       const summary = await generateSummary(query, extraction);
       return res.json({ summary });
-    } catch (error: any) {
+    } catch (error) {
       console.error("AI Summary generation error:", error);
-      const message = error?.message || "Failed to generate summary.";
-      return res.status(500).json({ error: message });
+      return res.status(500).json({ error: "Failed to generate summary." });
     }
   });
 
-  // DB Cache Routes
-  apiRouter.get("/cache-lookup", async (req, res) => {
+  // API Routes
+  app.get("/api/cache-lookup", async (req, res) => {
     const { q } = req.query;
     if (!q || typeof q !== "string") {
       return res.status(400).json({ error: "Query is required" });
@@ -144,7 +125,7 @@ async function startServer() {
     }
   });
 
-  apiRouter.post("/cache-result", async (req, res) => {
+  app.post("/api/cache-result", async (req, res) => {
     const { query, result } = req.body;
     if (!query || !result) {
       return res.status(400).json({ error: "Query and result are required" });
@@ -165,7 +146,7 @@ async function startServer() {
     }
   });
 
-  apiRouter.post("/reddit-content", async (req, res) => {
+  app.post("/api/reddit-content", async (req, res) => {
     const { urls } = req.body;
     if (!urls || !Array.isArray(urls)) {
       return res.status(400).json({ error: "URLs array is required" });
@@ -179,14 +160,6 @@ async function startServer() {
       return res.status(500).json({ error: "Internal server error" });
     }
   });
-
-  // Catch-all for /api routes to prevent falling through to SPA HTML
-  apiRouter.use((req, res) => {
-    res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
-  });
-
-  // Mount API Router
-  app.use("/api", apiRouter);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
