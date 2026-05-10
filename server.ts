@@ -12,7 +12,7 @@ const rawKey = process.env.GEMINI_API_KEY;
 if (rawKey) {
   // Sanitize for logging and verification
   const sanitized = rawKey.trim().replace(/^["']|["']$/g, "").replace(/[^\x21-\x7E]/g, "");
-  
+
   if (sanitized === "MY_GEMINI_API_KEY" || sanitized === "") {
     console.warn("CRITICAL: GEMINI_API_KEY is a placeholder or empty. Please set it in the AI Studio Secrets panel.");
   } else if (!sanitized.startsWith("AIza")) {
@@ -24,10 +24,10 @@ if (rawKey) {
   console.warn("CRITICAL: GEMINI_API_KEY is missing from process.env");
 }
 
-import { fetchRedditThreadContent } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/reddit.ts";
-import { prisma } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/prisma.ts";
-import { findRedditThreads, extractProductInsights, generateSummary } from "./src/lib/extraction.ts";
-import { RedditPost } from "../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
+import { fetchRedditThreadContent } from "./src/lib/reddit";
+import { prisma } from "./src/lib/prisma";
+import { findRedditThreads, extractProductInsights, generateSummary } from "./src/lib/extraction";
+import { RedditPost } from "./src/types";
 
 async function startServer() {
   const app = express();
@@ -36,7 +36,18 @@ async function startServer() {
   // Trust proxy for express-rate-limit to work in AI Studio (which is behind a proxy)
   app.set('trust proxy', 1);
 
+  // Request Logger
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+
   app.use(express.json({ limit: '10mb' }));
+
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
 
   // General API Rate limiter
   const apiLimiter = rateLimit({
@@ -46,22 +57,26 @@ async function startServer() {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => {
-      return (req.headers['x-forwarded-for'] as string) || req.ip || "unknown";
+      const forwarded = req.headers['x-forwarded-for'];
+      return Array.isArray(forwarded) ? forwarded[0] : (forwarded as string) || req.ip || "unknown";
     }
   });
 
   // Strict rate limiter for AI operations
   const aiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
+    windowMs: 15 * 60 * 1000,
     max: 20, // Expensive AI/Grounding operations
     message: { error: "Too many AI research requests. Please try again in 15 minutes." },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => (req.headers['x-forwarded-for'] as string) || req.ip || "unknown"
+    keyGenerator: (req) => {
+      const forwarded = req.headers['x-forwarded-for'];
+      return Array.isArray(forwarded) ? forwarded[0] : (forwarded as string) || req.ip || "unknown";
+    }
   });
 
   // Apply general limiter to all API routes
-  app.use("/api/", apiLimiter);
+  app.use("/api", apiLimiter);
 
   // AI Research Routes
   app.post("/api/research/threads", aiLimiter, async (req, res) => {
