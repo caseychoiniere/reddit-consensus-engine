@@ -4,11 +4,11 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Search, ArrowLeft, ExternalLink, ThumbsUp, ThumbsDown, Quote, AlertCircle, Loader2, X, Scale, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { SearchResult, RankedProduct, RedditPost } from "../../../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
-import { cn } from "../../../../../Downloads/reddit-consensus-engine (6)/src/lib/utils.ts";
-import { rankProducts } from "../../../../../Downloads/reddit-consensus-engine (6)/src/lib/ranking.ts";
-import { useAppContext } from "../../../../../Downloads/reddit-consensus-engine (6)/src/context/AppContext.tsx";
-import ThemeToggle from "../../../../../Downloads/reddit-consensus-engine (6)/src/components/ThemeToggle.tsx";
+import { SearchResult, RankedProduct, RedditPost } from "../types";
+import { cn } from "../lib/utils";
+import { rankProducts } from "../lib/ranking";
+import { useAppContext } from "../context/AppContext";
+import ThemeToggle from "../components/ThemeToggle";
 
 function SearchResultsContent() {
   const [searchParams] = useSearchParams();

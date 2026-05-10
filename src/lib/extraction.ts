@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { RedditPost, ExtractionResult } from "../../../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
+import { RedditPost, ExtractionResult } from "../types.ts";
 
 const getAIClient = () => {
   let apiKey = process.env.GEMINI_API_KEY;
