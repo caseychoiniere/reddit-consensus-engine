@@ -44,11 +44,6 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", env: process.env.NODE_ENV });
-  });
-
   // General API Rate limiter
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -75,11 +70,17 @@ async function startServer() {
     }
   });
 
-  // Apply general limiter to all API routes
-  app.use("/api", apiLimiter);
+  // API Routes Group
+  const apiRouter = express.Router();
+  apiRouter.use(apiLimiter);
+
+  // Health check
+  apiRouter.get("/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
 
   // AI Research Routes
-  app.post("/api/research/threads", aiLimiter, async (req, res) => {
+  apiRouter.post("/research/threads", aiLimiter, async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
     try {
@@ -92,7 +93,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/research/insights", aiLimiter, async (req, res) => {
+  apiRouter.post("/research/insights", aiLimiter, async (req, res) => {
     const { query, posts, urls } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
     try {
@@ -105,7 +106,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/research/summary", aiLimiter, async (req, res) => {
+  apiRouter.post("/research/summary", aiLimiter, async (req, res) => {
     const { query, extraction } = req.body;
     if (!query || !extraction) return res.status(400).json({ error: "Query and extraction are required" });
     try {
@@ -118,8 +119,8 @@ async function startServer() {
     }
   });
 
-  // API Routes
-  app.get("/api/cache-lookup", async (req, res) => {
+  // DB Cache Routes
+  apiRouter.get("/cache-lookup", async (req, res) => {
     const { q } = req.query;
     if (!q || typeof q !== "string") {
       return res.status(400).json({ error: "Query is required" });
@@ -143,7 +144,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/cache-result", async (req, res) => {
+  apiRouter.post("/cache-result", async (req, res) => {
     const { query, result } = req.body;
     if (!query || !result) {
       return res.status(400).json({ error: "Query and result are required" });
@@ -164,7 +165,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/reddit-content", async (req, res) => {
+  apiRouter.post("/reddit-content", async (req, res) => {
     const { urls } = req.body;
     if (!urls || !Array.isArray(urls)) {
       return res.status(400).json({ error: "URLs array is required" });
@@ -178,6 +179,14 @@ async function startServer() {
       return res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  // Catch-all for /api routes to prevent falling through to SPA HTML
+  apiRouter.use((req, res) => {
+    res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
+  });
+
+  // Mount API Router
+  app.use("/api", apiRouter);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
