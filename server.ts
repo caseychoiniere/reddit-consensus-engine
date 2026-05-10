@@ -24,9 +24,10 @@ if (rawKey) {
   console.warn("CRITICAL: GEMINI_API_KEY is missing from process.env");
 }
 
-import { fetchRedditThreadContent } from "./src/lib/reddit.ts";
-import { prisma } from "./src/lib/prisma.ts";
-import { findRedditThreads, extractProductInsights, generateSummary } from "./src/lib/extraction.ts";
+import { fetchRedditThreadContent } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/reddit.ts";
+import { prisma } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/prisma.ts";
+import { findRedditThreads, extractProductInsights, generateSummary } from "../../../Downloads/reddit-consensus-engine (6)/src/lib/extraction.ts";
+import { RedditPost } from "../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
 
 async function startServer() {
   const app = express();
@@ -69,9 +70,10 @@ async function startServer() {
     try {
       const urls = await findRedditThreads(query);
       return res.json({ urls });
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Thread Research error:", error);
-      return res.status(500).json({ error: "Failed to find discussion threads." });
+      const message = error?.message || "Failed to find discussion threads.";
+      return res.status(500).json({ error: message });
     }
   });
 
@@ -81,9 +83,10 @@ async function startServer() {
     try {
       const extraction = await extractProductInsights(query, posts || [], urls || []);
       return res.json(extraction);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Insight Extraction error:", error);
-      return res.status(500).json({ error: "Failed to extract product insights." });
+      const message = error?.message || "Failed to extract product insights.";
+      return res.status(500).json({ error: message });
     }
   });
 
@@ -93,9 +96,10 @@ async function startServer() {
     try {
       const summary = await generateSummary(query, extraction);
       return res.json({ summary });
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Summary generation error:", error);
-      return res.status(500).json({ error: "Failed to generate summary." });
+      const message = error?.message || "Failed to generate summary.";
+      return res.status(500).json({ error: message });
     }
   });
 

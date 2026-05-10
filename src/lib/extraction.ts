@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { RedditPost, ExtractionResult } from "../types";
+import { RedditPost, ExtractionResult } from "../../../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
 
 const getAIClient = () => {
   let apiKey = process.env.GEMINI_API_KEY;
@@ -77,7 +77,7 @@ export async function findRedditThreads(query: string): Promise<string[]> {
       return cleanUrls.slice(0, 10);
     } catch (error) {
       console.error("Error finding Reddit threads:", error);
-      return [];
+      throw error;
     }
   })();
 
@@ -183,7 +183,7 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
       return result as ExtractionResult;
     } catch (error) {
       console.error("Extraction error:", error);
-      return { products: [] };
+      throw error;
     }
   })();
 
@@ -221,7 +221,8 @@ export async function generateSummary(query: string, extraction: ExtractionResul
       });
       return response.text || "No summary available.";
     } catch (error) {
-      return "Error generating summary.";
+      console.error("Summary error:", error);
+      throw error;
     }
   })();
 

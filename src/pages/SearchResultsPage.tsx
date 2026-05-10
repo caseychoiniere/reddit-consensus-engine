@@ -4,11 +4,11 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Search, ArrowLeft, ExternalLink, ThumbsUp, ThumbsDown, Quote, AlertCircle, Loader2, X, Scale, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { SearchResult, RankedProduct, RedditPost } from "../types";
-import { cn } from "../lib/utils.ts";
-import { rankProducts } from "../lib/ranking.ts";
-import { useAppContext } from "../context/AppContext.tsx";
-import ThemeToggle from "../components/ThemeToggle.tsx";
+import { SearchResult, RankedProduct, RedditPost } from "../../../../../Downloads/reddit-consensus-engine (6)/src/types.ts";
+import { cn } from "../../../../../Downloads/reddit-consensus-engine (6)/src/lib/utils.ts";
+import { rankProducts } from "../../../../../Downloads/reddit-consensus-engine (6)/src/lib/ranking.ts";
+import { useAppContext } from "../../../../../Downloads/reddit-consensus-engine (6)/src/context/AppContext.tsx";
+import ThemeToggle from "../../../../../Downloads/reddit-consensus-engine (6)/src/components/ThemeToggle.tsx";
 
 function SearchResultsContent() {
   const [searchParams] = useSearchParams();
@@ -131,7 +131,10 @@ function SearchResultsContent() {
           body: JSON.stringify({ query }),
         });
         
-        if (!threadsRes.ok) throw new Error("Failed to find Reddit threads");
+        if (!threadsRes.ok) {
+          const errorData = await threadsRes.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to find Reddit threads");
+        }
         const { urls: threadUrls } = await threadsRes.json();
         
         console.log(`Step 1 complete: Found ${threadUrls.length} threads`);
@@ -169,6 +172,7 @@ function SearchResultsContent() {
         if (!isMounted) return;
 
         // 3. If no threads found at all (and no content fetched)
+        // Only show this if we actually succeeded in calling the search but got 0 results
         if (threadUrls.length === 0 && posts.length === 0) {
           const emptyResult: SearchResult = {
             query,
@@ -190,7 +194,10 @@ function SearchResultsContent() {
           body: JSON.stringify({ query, posts, urls: threadUrls }),
         });
         
-        if (!insightsRes.ok) throw new Error("Failed to extract product insights");
+        if (!insightsRes.ok) {
+          const errorData = await insightsRes.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to extract product insights");
+        }
         const extraction = await insightsRes.json();
         
         if (!isMounted) return;
@@ -207,7 +214,10 @@ function SearchResultsContent() {
           body: JSON.stringify({ query, extraction }),
         });
         
-        if (!summaryRes.ok) throw new Error("Failed to generate summary");
+        if (!summaryRes.ok) {
+          const errorData = await summaryRes.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to generate summary");
+        }
         const { summary } = await summaryRes.json();
 
         if (!isMounted) return;
@@ -250,11 +260,13 @@ function SearchResultsContent() {
           body: JSON.stringify({ query, result: finalResult }),
         }).catch(err => console.warn("Failed to cache result on server", err));
 
-      } catch (err) {
+      } catch (err: any) {
         console.error("Search error:", err);
         if (isMounted) {
-          if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('timeout'))) {
+          if (err?.name === 'AbortError' || err?.message?.includes('timeout')) {
             setError("Analysis timed out. Community sentiment analysis can take time.");
+          } else if (err?.message) {
+            setError(err.message);
           } else {
             setError("Something went wrong while analyzing Reddit discussions.");
           }
