@@ -38,8 +38,8 @@ model Mention {
   sourceUrl     String
   textSnippet   String
   sentiment     String      // "positive", "negative", "neutral"
-  pros          String[]
-  cons          String[]
+  pros          String?
+  cons          String?
   createdAt     DateTime    @default(now())
 }
 

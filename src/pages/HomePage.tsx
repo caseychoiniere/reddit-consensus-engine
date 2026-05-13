@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight, MessageSquare, ShieldCheck, Zap, History, Trash2, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useAppContext } from "../context/AppContext";
-import ThemeToggle from "../components/ThemeToggle";
+import { useAppContext } from "../context/AppContext.tsx";
+import ThemeToggle from "../components/ThemeToggle.tsx";
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
@@ -47,7 +47,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6 bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6 pb-1 bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
             Reddit Consensus Engine
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-200 mb-12 max-w-2xl mx-auto">

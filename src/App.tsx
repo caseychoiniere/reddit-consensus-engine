@@ -4,9 +4,9 @@
  */
 
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import HomePage from "./pages/HomePage";
-import SearchResultsPage from "./pages/SearchResultsPage";
-import { AppProvider } from "./context/AppContext";
+import HomePage from "./pages/HomePage.tsx";
+import SearchResultsPage from "./pages/SearchResultsPage.tsx";
+import { AppProvider } from "./context/AppContext.tsx";
 
 export default function App() {
   return (

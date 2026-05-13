@@ -1,9 +1,25 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { RedditPost, ExtractionResult } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const getAIClient = () => {
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not defined. Please check your environment variables or AI Studio Secrets.");
+  }
+
+  // Remove any unintentional quotes, whitespace, or hidden characters (BOM, etc.)
+  apiKey = apiKey.trim().replace(/^["']|["']$/g, "").replace(/[^\x21-\x7E]/g, "");
+
+  // Validation: Google API keys usually start with AIza
+  if (!apiKey.startsWith("AIza")) {
+    console.warn(`GEMINI_API_KEY warning: Key starts with "${apiKey.substring(0, 4)}...", which is unusual (expected "AIza").`);
+  }
+
+  return new GoogleGenAI({ apiKey });
+};
 
 export async function findRedditThreads(query: string): Promise<string[]> {
+  const ai = getAIClient();
   const prompt = `Search for the top 10 most relevant and recent Reddit threads discussing product recommendations, reviews, or "best of" lists for: "${query}". 
   I need the direct URLs to the Reddit posts (e.g., https://www.reddit.com/r/subreddit/comments/id/title/).
   Focus on subreddits known for high-quality discussions (e.g., r/BuyItForLife, r/technology, or niche product subreddits).
@@ -11,11 +27,11 @@ export async function findRedditThreads(query: string): Promise<string[]> {
   IMPORTANT: You MUST provide the full URLs to the Reddit threads in your response. Do not just summarize.
   Format your response as a simple list of URLs, one per line.`;
 
-  const timeoutPromise = new Promise<string[]>((resolve) => 
-    setTimeout(() => {
-      console.warn(`Timeout finding threads via Google Search grounding for query: ${query} (90s)`);
-      resolve([]);
-    }, 90000)
+  const timeoutPromise = new Promise<string[]>((resolve) =>
+      setTimeout(() => {
+        console.warn(`Timeout finding threads via Google Search grounding for query: ${query} (90s)`);
+        resolve([]);
+      }, 90000)
   );
 
   const searchPromise = (async () => {
@@ -31,7 +47,7 @@ export async function findRedditThreads(query: string): Promise<string[]> {
 
       const text = response.text || "";
       console.log("Gemini search response text:", text);
-      
+
       const urls: string[] = [];
 
       // 1. Extract from grounding metadata (most reliable for search)
@@ -50,11 +66,11 @@ export async function findRedditThreads(query: string): Promise<string[]> {
       matches.forEach(m => urls.push(m));
 
       // 3. Clean and deduplicate
-      const cleanUrls = [...new Set(urls.map(u => 
-        u.replace(/[.\/!?,;:]+$/, "")
-         .replace(/[)]+$/, "")
-         .replace(/\\/g, "")
-         .replace(/&amp;/g, "&")
+      const cleanUrls = [...new Set(urls.map(u =>
+          u.replace(/[.\/!?,;:]+$/, "")
+              .replace(/[)]+$/, "")
+              .replace(/\\/g, "")
+              .replace(/&amp;/g, "&")
       ))].filter(u => u.includes("reddit.com/r/") && (u.includes("/comments/") || u.split("/").length > 5));
 
       console.log(`Found ${cleanUrls.length} Reddit threads for query: ${query}`, cleanUrls);
@@ -69,54 +85,57 @@ export async function findRedditThreads(query: string): Promise<string[]> {
 }
 
 export async function extractProductInsights(query: string, posts: RedditPost[], urls: string[] = []): Promise<ExtractionResult> {
-  // Prepare text for extraction if we have posts
-  const context = posts.map(post => {
+  const ai = getAIClient();
+
+  // Combine scraped posts (if any) with raw URLs for Gemini to fetch directly
+  const contextText = posts.map(post => {
     const commentsText = post.comments.map(c => `[Comment by ${c.author}]: ${c.body}`).join("\n");
     return `Title: ${post.title}\nContent: ${post.selftext}\nComments:\n${commentsText}`;
   }).join("\n\n---\n\n");
 
   const prompt = `
-    You are a product research assistant. Analyze the Reddit discussions about "${query}".
-    Extract a list of specific products, brands, or models mentioned in these discussions. For each item:
-    1. Identify the product/brand name clearly (e.g., "Herman Miller Aeron", "Steelcase Leap V2").
-    2. Estimate the total number of mentions this product received in the discussions.
-    3. Find the Amazon ASIN (Product ID) for this specific product (e.g., B00141L18I). 
-       - Use the googleSearch tool with the query: 'site:amazon.com "EXACT PRODUCT NAME"'.
-       - Examine the search results carefully. Only extract the ASIN if you find a direct Amazon.com product page (e.g., amazon.com/dp/ASIN or amazon.com/name/dp/ASIN).
-       - IMPORTANT: ONLY provide an ASIN if it is verified from a search result. 
-       - If you cannot find a verified ASIN on the first page of results, leave the field empty. 
-       - DO NOT hallucinate, guess, or use placeholders. 
-       - Accuracy is more important than having an ASIN for every product.
-    3. Determine the overall sentiment (positive, negative, or neutral).
-    4. List key pros and cons mentioned by users.
-    5. Provide 1-2 representative quotes from the text.
-
-    Include any product that is discussed, even if it's just a brand name.
-    Be inclusive but accurate to the text.
+    You are a product research assistant. Analyze the community discussions about "${query}" on Reddit.
     
-    ${posts.length > 0 ? "Use the provided context below for sentiment and quotes." : `Research the following Reddit threads for product recommendations regarding '${query}': ${urls.join(", ")}. 
-    Use the googleSearch tool to find the community consensus for this query. 
-    Find at least 5 specific product recommendations that appear frequently in Reddit discussions.`}
+    ${urls.length > 0 ? `I have provided several Reddit threads via the urlContext tool: ${urls.join(", ")}.` : ""}
+    ${posts.length > 0 ? "I also have some pre-scraped post content provided below." : ""}
 
-    ${posts.length > 0 ? `Context:\n${context.slice(0, 30000)}` : ""}
+    Extract a list of specific products, brands, or models discussed. For each item:
+    1. Identify the product/brand name clearly.
+    2. Estimate the total number of mentions/recommendations this product received.
+    3. Find the Amazon ASIN (Product ID) for this specific product. 
+       - Use the googleSearch tool with the query: 'site:amazon.com "EXACT PRODUCT NAME"'.
+       - Only extract the ASIN if you find a direct Amazon.com product page.
+       - DO NOT hallucinate. Accuracy is critical.
+    4. Determine the overall sentiment (positive, negative, or neutral).
+    5. List key pros and cons mentioned by the community.
+    6. Provide 1-2 representative quotes.
+
+    Find at least 5 specific product recommendations that appear frequently.
+    
+    ${posts.length > 0 ? `Pre-scraped Context:\n${contextText.slice(0, 20000)}` : ""}
   `;
 
-  const timeoutPromise = new Promise<ExtractionResult>((resolve) => 
-    setTimeout(() => {
-      console.warn(`Timeout extracting product insights for query: ${query} (90s)`);
-      resolve({ products: [] });
-    }, 90000) // Increased timeout for URL context and search
+  const timeoutPromise = new Promise<ExtractionResult>((resolve) =>
+      setTimeout(() => {
+        console.warn(`Timeout extracting product insights for query: ${query} (120s)`);
+        resolve({ products: [] });
+      }, 120000)
   );
 
   const extractionPromise = (async () => {
     try {
-      console.log(`Extracting product insights for: ${query}. Posts: ${posts.length}, URLs: ${urls.length}`);
-      
+      console.log(`Extracting product insights for: ${query}. (URLs to fetch: ${urls.length}, Scraped: ${posts.length})`);
+
+      const tools: any[] = [{ googleSearch: {} }];
+      if (urls.length > 0) {
+        tools.push({ urlContext: {} });
+      }
+
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
+          tools,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -127,12 +146,22 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
                   type: Type.OBJECT,
                   properties: {
                     name: { type: Type.STRING },
-                    mentionCount: { type: Type.NUMBER, description: "Estimated number of times this product was mentioned in the discussions" },
-                    asin: { type: Type.STRING, description: "The Amazon ASIN for the product (e.g., B0C65CMKTK)" },
+                    mentionCount: { type: Type.NUMBER },
+                    asin: { type: Type.STRING },
                     sentiment: { type: Type.STRING, enum: ["positive", "negative", "neutral"] },
                     pros: { type: Type.ARRAY, items: { type: Type.STRING } },
                     cons: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    quotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    quotes: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          text: { type: Type.STRING },
+                          sourceUrl: { type: Type.STRING }
+                        },
+                        required: ["text"]
+                      }
+                    },
                   },
                   required: ["name", "mentionCount", "sentiment", "pros", "cons", "quotes"],
                 },
@@ -145,10 +174,10 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
 
       const text = response.text || '{"products": []}';
       console.log("Extraction raw response text:", text);
-      
+
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const jsonStr = jsonMatch ? jsonMatch[0] : text;
-      
+
       const result = JSON.parse(jsonStr);
       console.log(`Extracted ${result.products?.length || 0} products`);
       return result as ExtractionResult;
@@ -162,6 +191,7 @@ export async function extractProductInsights(query: string, posts: RedditPost[],
 }
 
 export async function generateSummary(query: string, extraction: ExtractionResult): Promise<string> {
+  const ai = getAIClient();
   const prompt = `
     Summarize the Reddit consensus for the query: "${query}".
     
@@ -176,11 +206,11 @@ export async function generateSummary(query: string, extraction: ExtractionResul
     Write a concise, trustworthy summary (2-3 sentences).
   `;
 
-  const timeoutPromise = new Promise<string>((resolve) => 
-    setTimeout(() => {
-      console.warn("Timeout generating summary");
-      resolve("The analysis took longer than expected. Please check the ranked list below for details.");
-    }, 15000)
+  const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => {
+        console.warn("Timeout generating summary");
+        resolve("The analysis took longer than expected. Please check the ranked list below for details.");
+      }, 15000)
   );
 
   const summaryPromise = (async () => {
