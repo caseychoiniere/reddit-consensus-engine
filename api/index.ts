@@ -4,13 +4,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-import { fetchRedditThreadContent } from "../src/lib/reddit.ts";
-import { prisma } from "../src/lib/prisma.ts";
+import { fetchRedditThreadContent } from "../src/lib/reddit.js";
+import { prisma } from "../src/lib/prisma.js";
 import {
     findRedditThreads,
     extractProductInsights,
     generateSummary,
-} from "../src/lib/extraction.ts";
+} from "../src/lib/extraction.js";
 
 const app = express();
 
