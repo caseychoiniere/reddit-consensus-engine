@@ -1,5 +1,5 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -17,15 +17,25 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
 
+// ✅ FIXED key generator
+const getClientIp = (req: any) => {
+    const forwardedFor = req.headers["x-forwarded-for"];
+
+    if (typeof forwardedFor === "string" && forwardedFor.length > 0) {
+        const firstIp = forwardedFor.split(",")[0].trim();
+        return ipKeyGenerator(firstIp);
+    }
+
+    return ipKeyGenerator(req.ip || "unknown");
+};
+
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     message: { error: "Too many requests. Please try again later." },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => {
-        return (req.headers["x-forwarded-for"] as string) || req.ip || "unknown";
-    },
+    keyGenerator: getClientIp,
 });
 
 const aiLimiter = rateLimit({
@@ -34,18 +44,18 @@ const aiLimiter = rateLimit({
     message: { error: "Too many AI research requests. Please try again in 15 minutes." },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => {
-        return (req.headers["x-forwarded-for"] as string) || req.ip || "unknown";
-    },
+    keyGenerator: getClientIp,
 });
 
 app.use(apiLimiter);
 
-app.get("/api/", (_req, res) => {
+// Health check
+app.get("/api", (_req, res) => {
     return res.status(200).json({ ok: true, service: "Reddit Suggests API" });
 });
 
-app.post("/api/api/research/threads", aiLimiter, async (req, res) => {
+// AI routes
+app.post("/api/research/threads", aiLimiter, async (req, res) => {
     const { query } = req.body;
 
     if (!query) {
@@ -93,6 +103,7 @@ app.post("/api/research/summary", aiLimiter, async (req, res) => {
     }
 });
 
+// Cache routes
 app.get("/api/cache-lookup", async (req, res) => {
     const { q } = req.query;
 
@@ -152,6 +163,7 @@ app.post("/api/cache-result", async (req, res) => {
     }
 });
 
+// Reddit proxy
 app.post("/api/reddit-content", async (req, res) => {
     const { urls } = req.body;
 
