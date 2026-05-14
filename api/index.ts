@@ -41,11 +41,11 @@ const aiLimiter = rateLimit({
 
 app.use(apiLimiter);
 
-app.get("/", (_req, res) => {
+app.get("/api/", (_req, res) => {
     return res.status(200).json({ ok: true, service: "Reddit Suggests API" });
 });
 
-app.post("/research/threads", aiLimiter, async (req, res) => {
+app.post("/api/api/research/threads", aiLimiter, async (req, res) => {
     const { query } = req.body;
 
     if (!query) {
@@ -61,7 +61,7 @@ app.post("/research/threads", aiLimiter, async (req, res) => {
     }
 });
 
-app.post("/research/insights", aiLimiter, async (req, res) => {
+app.post("/api/research/insights", aiLimiter, async (req, res) => {
     const { query, posts, urls } = req.body;
 
     if (!query) {
@@ -77,7 +77,7 @@ app.post("/research/insights", aiLimiter, async (req, res) => {
     }
 });
 
-app.post("/research/summary", aiLimiter, async (req, res) => {
+app.post("/api/research/summary", aiLimiter, async (req, res) => {
     const { query, extraction } = req.body;
 
     if (!query || !extraction) {
@@ -93,7 +93,7 @@ app.post("/research/summary", aiLimiter, async (req, res) => {
     }
 });
 
-app.get("/cache-lookup", async (req, res) => {
+app.get("/api/cache-lookup", async (req, res) => {
     const { q } = req.query;
 
     if (!q || typeof q !== "string") {
@@ -122,7 +122,7 @@ app.get("/cache-lookup", async (req, res) => {
     }
 });
 
-app.post("/cache-result", async (req, res) => {
+app.post("/api/cache-result", async (req, res) => {
     const { query, result } = req.body;
 
     if (!query || !result) {
@@ -152,7 +152,7 @@ app.post("/cache-result", async (req, res) => {
     }
 });
 
-app.post("/reddit-content", async (req, res) => {
+app.post("/api/reddit-content", async (req, res) => {
     const { urls } = req.body;
 
     if (!urls || !Array.isArray(urls)) {
